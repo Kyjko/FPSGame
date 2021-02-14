@@ -19,6 +19,7 @@ private:
 
 	float pax, pay;
 	float amnt, amnt2;
+	float upwards_accel;
 
 	GLuint W, H;
 

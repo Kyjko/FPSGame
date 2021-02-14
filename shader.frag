@@ -2,10 +2,10 @@
 
 #define MAX_STEPS 2000
 #define SURF_DIST .01
-#define MAX_DIST 1000.0
+#define MAX_DIST 200.0
 #define REFLECTIVITY .4
 
-#define MAX_REFLECTIONS 3
+#define OLDEFFECT 0
 
 in vec4 vertexColor;
 in vec2 uv;
@@ -18,6 +18,7 @@ uniform float u_HperW;
 uniform mat4 u_ModelMatrix_view;
 uniform float u_px;
 uniform float u_pz;
+uniform float u_py;
 
 //---------------------
 float GetDist(vec3 p);
@@ -30,7 +31,7 @@ float GetLightAndRefl(vec3 p, vec3 ro);
 
 // polynomial smooth min (k = 0.1);
 float smin( float a, float b) {
-	float k = 1.0;
+	float k = 1.5;
     float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
     return mix( b, a, h ) - k*h*(1.0-h);
 }
@@ -41,13 +42,12 @@ float sphere(vec3 p, vec4 sphere) {
 }
 
 float infinite_sphere(vec3 p, vec4 sphere) {
-	float dS = length(mod(p, 13)-sphere.xyz) - sphere.w;
+	float dS = length(mod(p.xyz, 20.0)-sphere.xyz) - sphere.w;
 	return dS;
 }
 
-float plane(vec3 p) {
-	float dP = p.y;
-	return dP;
+float plane(vec3 p, float offset) {
+	return p.y + offset;
 }
 
 float box(vec3 p, vec3 s) {
@@ -67,7 +67,7 @@ vec3 GetNormal(vec3 p) {
 
 float GetLight(vec3 p) {
 	vec3 lightPos = vec3(0,10, 6);
-	lightPos.xz += vec2(25*sin(u_Time/4), 25*cos(u_Time/4));
+	lightPos.xz += vec2(50*sin(u_Time/4), 50*cos(u_Time/4));
 	vec3 l = normalize(lightPos - p);
 	vec3 n = GetNormal(p);
 
@@ -94,15 +94,23 @@ float GetRefl(vec3 p, vec3 o) {
 }
 
 float GetDist(vec3 p) {
-	float d1 = plane(p);
-	float d2 = sphere(p, vec4(3, 1.5, 8, 1.0));
-	float d3 = sphere(p, vec4(1, 1.5 + sin(u_Time)*1.5, 8, 0.65));
+	float p1 = plane(p, 0);
+	float s1 = sphere(p, vec4(3, 1.5, 8, 1));
+	float s2 = sphere(p, vec4(-5, 3, 10, 2));
+	float s3 = sphere(p, vec4(8, 1.5, 15, 1));
+	float b1 = box(p-vec3(-1.9, 2, 14), vec3(.5, .5, .5));
+	float b2 = box(p-vec3(4.4, 2, 10), vec3(5, 5., .1));
+	//float d3 = sphere(p, vec4(1, 1.5 + sin(u_Time)*1.5, 8, 0.65));
 
-	float db1 = box(p-vec3(-1.9, 2, 14), vec3(.6, 2, .7));
+	//float db1 = box(p-vec3(-1.9, 2, 14), vec3(.6, 2, .7));
 	
-	float dm = smin(d1, db1);
-	dm = min(dm, d2);
-	dm = min(dm, d3);
+	
+	float dm = min(p1, s1);
+	dm = min(dm, s2);
+	dm = min(dm, s3);
+	dm = min(dm, b1);
+	dm = min(dm, b2);
+	//dm = min(dm, d3);
 
 	return dm;
 }
@@ -135,7 +143,7 @@ void main() {
 	vec3 col = vec3(0);
 	
 	vec3 rd = normalize(vec4((vec4(vec3(uv.x, uv.y * u_HperW, 1), 1.) * u_ModelMatrix_view)).xyz);
-	vec3 ro = vec3(0 + u_px, 3, 0 + u_pz);
+	vec3 ro = vec3(0 + u_px, 3 + u_py, 0 + u_pz);
 	float d = RayMarch(ro, rd);
 	vec3 p = ro + rd * d;
 
@@ -143,9 +151,10 @@ void main() {
 	float c = GetLightAndRefl(p, ro);
 	col = vec3(c);
 
-	//col *= scanLineIntensity(uv.x + sin(u_Time), 1440, 0.6).xyz;
-    //col *= scanLineIntensity(uv.y, 2560, 0.3).xyz;
-	
+#if OLDEFFECT == 1
+	col *= scanLineIntensity(uv.x + sin(u_Time), 1440, 0.6).xyz;
+    col *= scanLineIntensity(uv.y, 2560, 0.3).xyz;
+#endif
 
 	fragColor = vec4(col, 1.0) * vertexColor * 2.;// + 0.3 *vec4(sin(u_Time)/3, cos(u_Time)/5, sin(u_Time)/3, 1.0);
 }

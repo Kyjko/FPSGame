@@ -1,12 +1,13 @@
 #include "MainFrame.h"
 
 MainFrame::MainFrame(std::string& t) : title(t), W(DEFAULT_WIDTH), H(DEFAULT_HEIGHT),
-					pax(0.0), pay(0.0), amnt(0.0) {
+					pax(0.0), pay(0.0), amnt(0.0), amnt2(0.0), upwards_accel(0.0) {
 
-	Log("MainFrame started!", MSG_TYPES::WARN);
+	Log("MainFrame started!", LogEnums::MSG_TYPES::WARN);
 	errno_t err = Init(t);
 	if (err < 0) {
-		fprintf(stderr, "[-] Init unsuccessful - err: %d\n", err);
+		Log("Init unsuccessful!", LogEnums::MSG_TYPES::FATAL);
+		std::cout << err << "\n";
 		exit(-1);
 	}
 	EventLoop();
@@ -82,6 +83,14 @@ void MainFrame::EventLoop() {
 					amnt = -1;
 					break;
 				}
+				if (e.key.keysym.sym == SDLK_SPACE) {
+					upwards_accel = 0.1;
+					break;
+				}
+				if (e.key.keysym.sym == SDLK_LSHIFT) {
+					upwards_accel = -0.1;
+					break;
+				}
 			case SDL_KEYUP:
 				if (e.key.keysym.sym == SDLK_w || e.key.keysym.sym == SDLK_s) {
 					amnt = 0;
@@ -89,6 +98,10 @@ void MainFrame::EventLoop() {
 				}
 				if (e.key.keysym.sym == SDLK_a || e.key.keysym.sym == SDLK_d) {
 					amnt2 = 0;
+					break;
+				}
+				if (e.key.keysym.sym == SDLK_SPACE || e.key.keysym.sym == SDLK_LSHIFT) {
+					upwards_accel = 0;
 					break;
 				}
 				break;
@@ -122,7 +135,7 @@ void MainFrame::EventLoop() {
 
 void MainFrame::Render() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	scene->On_Render(pax, pay, amnt, amnt2);
+	scene->On_Render(pax, pay, amnt, amnt2, upwards_accel);
 	SDL_GL_SwapWindow(_w);
 }
 
@@ -131,7 +144,7 @@ void MainFrame::GetScreenResolution() {
 	SDL_GetCurrentDisplayMode(0, &DM);
 	W = DM.w;
 	H = DM.h;
-	Log("Screen resolution set.", MSG_TYPES::WARN);
+	Log("Screen resolution set.", LogEnums::MSG_TYPES::WARN);
 }
 
 MainFrame::~MainFrame() {
@@ -145,5 +158,5 @@ MainFrame::~MainFrame() {
 	delete scene;
 	SDL_Quit();
 
-	Log("Exiting MainFrame...", MSG_TYPES::WARN);
+	Log("Exiting MainFrame...", LogEnums::MSG_TYPES::WARN);
 }

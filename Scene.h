@@ -47,7 +47,7 @@ public:
 	Scene(unsigned int id, GLuint W, GLuint H);
 	~Scene();
 	void On_Init();
-	void On_Render(float new_player_ax, float new_player_ay, float new_amnt, float new_amnt2);
+	void On_Render(float new_player_ax, float new_player_ay, float new_amnt, float new_amnt2, float new_upwards_accel);
 
 	std::vector<Particle> particles;
 
@@ -61,7 +61,8 @@ private:
 	float player_ax;
 	float player_ay;
 	float amnt, amnt2;
-	float d_px, d_pz;
+	float d_px, d_pz, d_py;
+	float upwards_accel;
 
 	GLuint W, H;
 
@@ -83,6 +84,7 @@ private:
 	GLuint u_ModelMatrix_view_location;
 	GLuint u_px_location;
 	GLuint u_pz_location;
+	GLuint u_py_location;
 
 	Quad CreateQuad(float x, float y, float size, float r, float g, float b, float a);
 	void UpdateQuads();

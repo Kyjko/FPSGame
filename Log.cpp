@@ -9,10 +9,10 @@ std::string GetDateInString() {
 	return ss.str();;
 }
 
-void Log(const char* s, MSG_TYPES type) {
+void Log(const char* s, LogEnums::MSG_TYPES type) {
 
 	fprintf(stdout, "%s %s %s\n", GetDateInString().c_str(), 
-		type == MSG_TYPES::INFO ? "[~]" : type == MSG_TYPES::WARN ? "[-]"
-		 : type == MSG_TYPES::ERROR ? "[!]" : type == MSG_TYPES::FATAL 
+		type == LogEnums::MSG_TYPES::INFO ? "[~]" : type == LogEnums::MSG_TYPES::WARN ? "[-]"
+		 : type == LogEnums::MSG_TYPES::ERROR ? "[!]" : type == LogEnums::MSG_TYPES::FATAL 
 		? "[!!]" : "[]", s);
 }

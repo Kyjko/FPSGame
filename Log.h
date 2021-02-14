@@ -8,13 +8,15 @@
 
 std::string GetDateInString();
 
-enum MSG_TYPES {
-	INFO,
-	WARN,
-	ERROR,
-	FATAL
-};
+namespace LogEnums {
+	enum MSG_TYPES {
+		INFO,
+		WARN,
+		ERROR,
+		FATAL
+	};
+}
 
-void Log(const char* s, MSG_TYPES type);
+void Log(const char* s, LogEnums::MSG_TYPES type);
 
 

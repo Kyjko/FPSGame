@@ -8,7 +8,7 @@ Scene::Scene(unsigned int id, GLuint W, GLuint H): scene_id(id), ibo(0), vbo(0),
 						u_HperW_location(0), W(W), H(H), amnt(0.0), amnt2(0.0),
 					    player_ax(0.0), player_ay(0.0), u_ModelMatrix_view_location(0),
 						ModelMatrix_view(glm::mat4(1.0)), u_px_location(0), u_pz_location(0),
-						d_px(0.0), d_pz(0.0) {
+						d_px(0.0), d_pz(0.0), upwards_accel(0.0), u_py_location(0), d_py(0.0) {
 
 
 	std::cout << "\t\tScene Width set to " << W << std::endl;
@@ -26,11 +26,7 @@ Scene::~Scene() {
 	quads = std::vector<Quad>();
 	particles = std::vector<Particle>();
 	
-	char* s_scene_id = (char*)alloca(sizeof(char) * 25);
-	strcpy(s_scene_id, "(Scene id: ");
-	sprintf(s_scene_id + 11, "%u)", scene_id);
-	Log("Scene destroyed.", MSG_TYPES::INFO);
-	Log(s_scene_id, MSG_TYPES::INFO);
+	Log("Scene destroyed.", LogEnums::MSG_TYPES::INFO);
 }
 
 std::ostream& operator<<(std::ostream& stream, const Quad& q) {
@@ -80,6 +76,7 @@ void Scene::On_Init() {
 	u_ModelMatrix_view_location = glGetUniformLocation(shader_program, "u_ModelMatrix_view");
 	u_px_location = glGetUniformLocation(shader_program, "u_px");
 	u_pz_location = glGetUniformLocation(shader_program, "u_pz");
+	u_py_location = glGetUniformLocation(shader_program, "u_py");
 
 	std::cout << "R = " << (float)H / (float)W << std::endl;
 
@@ -92,7 +89,7 @@ void Scene::On_Init() {
 			0.2f, 0.9f, 0.56f, 1.0f, 0.5f, particles));*/
 		
 	//}
-	particles.push_back(Particle(-1.0, -1.0, 0.0, 0.49, 0.79, 0.86, 1.0, 2, particles));
+	particles.push_back(Particle(-1.0, -1.0, 0.0, 0.29, 0.89, 0.76, 1.0, 2, particles));
 	UpdateQuads();
 
 	// assert
@@ -144,11 +141,8 @@ void Scene::On_Init() {
 	glGenBuffers(1, &ibo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * 6 * num_models, indices, GL_DYNAMIC_DRAW);
-	char* s_scene_id = (char*)alloca(sizeof(char) * 25);
-	strcpy(s_scene_id, "(Scene id: ");
-	sprintf(s_scene_id + 11, "%u)", scene_id);
-	Log("Scene initialized.", MSG_TYPES::INFO);
-	Log(s_scene_id, MSG_TYPES::INFO);
+	
+	Log("Scene initialized.", LogEnums::MSG_TYPES::INFO);
 }
 
 void Scene::InitShaders(const std::string& vertex_shader_name, 
@@ -183,10 +177,10 @@ unsigned int Scene::CompileShader(std::string& source, GLuint type) {
 		char* err_msg = (char*)_alloca(len * sizeof(char));
 		glGetShaderInfoLog(id, len, &len, err_msg);
 		if (type == GL_VERTEX_SHADER) {
-			Log("Failed to compile vertex shader!", MSG_TYPES::FATAL);
+			Log("Failed to compile vertex shader!", LogEnums::MSG_TYPES::FATAL);
 		}
 		else {
-			Log("Failed to compile fragment shader!", MSG_TYPES::FATAL);
+			Log("Failed to compile fragment shader!", LogEnums::MSG_TYPES::FATAL);
 		}
 
 		glDeleteShader(id);
@@ -205,7 +199,7 @@ void Scene::CreateProgram(GLuint& shader_program) {
 	unsigned int vs = CompileShader(vertex_shader_string, GL_VERTEX_SHADER);
 	unsigned int fs = CompileShader(fragment_shader_string, GL_FRAGMENT_SHADER);
 	if (vs == 0 || fs == 0) {
-		Log("Shader compilation unsuccessful!", MSG_TYPES::FATAL);
+		Log("Shader compilation unsuccessful!", LogEnums::MSG_TYPES::FATAL);
 		exit(-1);
 	}
 
@@ -238,16 +232,19 @@ Quad Scene::CreateQuad(float x, float y, float size, float r, float g, float b, 
 	return { v0, v1, v2, v3 };
 }
 
-void Scene::On_Render(float new_player_ax, float new_player_ay, float new_amnt, float new_amnt2) {
+void Scene::On_Render(float new_player_ax, float new_player_ay, float new_amnt, float new_amnt2, float new_upwards_accel) {
 	player_ax = new_player_ax;
 	player_ay = new_player_ay;
+	if (new_player_ay > 90.0f / 25.0f) player_ay = 90.0f / 25.0f;
+	if (new_player_ay < -90.0f / 25.0f) player_ay = -90.0f / 25.0f;
 	amnt = new_amnt;
 	amnt2 = new_amnt2;
+	upwards_accel = new_upwards_accel;
 
 	//update modelmatrix
 	ModelMatrix_view = glm::mat4(1.0f);
 	ModelMatrix_view = glm::rotate(ModelMatrix_view, glm::radians(player_ay * 25.0f), glm::vec3(1.0, 0.0, 0.0));
-	ModelMatrix_view = glm::rotate(ModelMatrix_view, glm::radians(-player_ax*25.0f), glm::vec3(0.0, 1.0, 0.0));
+	ModelMatrix_view = glm::rotate(ModelMatrix_view, glm::radians(-player_ax * 25.0f), glm::vec3(0.0, 1.0, 0.0));
 
 	glm::vec4 rel(0, 0, 1, 1);
 	glm::vec4 rel2(1, 0, 0, 1);
@@ -259,6 +256,7 @@ void Scene::On_Render(float new_player_ax, float new_player_ay, float new_amnt, 
 	d_pz += rel.z * 0.08 * amnt;
 	d_px -= rel2.x * 0.08 * amnt2;
 	d_pz += rel2.z * 0.08 * amnt2;
+	d_py += upwards_accel;
 	
 	//update position
 
@@ -271,6 +269,7 @@ void Scene::On_Render(float new_player_ax, float new_player_ay, float new_amnt, 
 	glUniform1f(u_HperW_location, (float)H / (float)W);
 	glUniform1f(u_px_location, d_px);
 	glUniform1f(u_pz_location, d_pz);
+	glUniform1f(u_py_location, d_py);
 	glUniformMatrix4fv(u_ModelMatrix_view_location, 1, GL_FALSE, glm::value_ptr(ModelMatrix_view));
 
 	glBindVertexArray(vao);
