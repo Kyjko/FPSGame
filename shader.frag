@@ -6,7 +6,7 @@
 #define REFLECTIVITY .2
 
 //// mandelbulb
-#define Bailout 5.5
+#define Bailout 4.5
 #define Iterations 10
 //// mandelbulb
 
@@ -70,9 +70,9 @@ float box(vec3 p, vec3 s) {
 
 float mandelbulb(vec3 pos) {
 	float Power = max(2, abs(sin(u_Time/4)*10) + 1.5);
-	vec3 z = pos;
+	vec3 z = pos*2;
 	float dr = 1;
-	float r = 1;
+	float r = 1;		//1
 	for (int i = 0; i < Iterations ; i++) {
 		r = length(z);
 		if (r>Bailout) break;
@@ -85,7 +85,7 @@ float mandelbulb(vec3 pos) {
 		theta = theta*Power;
 		phi = phi*Power;
 		
-		z =  zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta * (.5 + cos(u_Time/30))));
+		z =  zr*vec3(sin(theta)*cos(phi* (.5 + cos(u_Time/30))), sin(phi)*sin(theta), cos(theta * (.5 + cos(u_Time/30))));
 		z+=pos;
 	}
 	return 0.5*log(r)*r/dr;
@@ -150,6 +150,29 @@ vec3 DE_color(vec3 z)
 	//float r = length(z);
 	//return r/abs(dr);
 	return vec3(/*length(z)/abs(dr)*/length(z)/min_orbit_dist*.25 , length(offset*0.00001*dr)*min_orbit_dist*.0015,  min_orbit_dist*.2);
+}
+
+vec3 mandelbulb_color(vec3 pos) {
+	float Power = max(2, abs(sin(u_Time/4)*10) + 1.5);
+	vec3 z = pos;
+	float dr = 1;
+	float r = 1;
+	for (int i = 0; i < Iterations ; i++) {
+		r = length(z);
+		if (r>Bailout) break;
+		
+		float theta = acos(z.z/r);
+		float phi = atan(z.y,z.x);
+		dr =  pow( r, Power-1.0)*Power*dr + 1.0;	// + 1.0
+		
+		float zr = pow( r,Power);
+		theta = theta*Power;
+		phi = phi*Power;
+		
+		z =  zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta * (.5 + cos(u_Time/30))));
+		z+=pos;
+	}
+	return vec3(0.5*log(r)*r/dr, log(r)*length(z-pos)*.002, log(r)*Power*dr*.0001);
 }
 
 //////////////////////////////////
@@ -261,6 +284,7 @@ void main() {
 	
 	col = vec3(c);
 	col += DE_color(p)*0.01;
+	col += mandelbulb_color(p)*0.000001;
 
 #if OLDEFFECT == 1
 	col *= scanLineIntensity(uv.x + sin(u_Time), 1440, 0.6).xyz;
