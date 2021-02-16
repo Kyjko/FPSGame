@@ -26,7 +26,7 @@ errno_t MainFrame::Init(std::string& title) {
 	if (_w == nullptr)
 		return -2;
 
-	_r = SDL_CreateRenderer(_w, -1, SDL_RENDERER_ACCELERATED);
+	_r = SDL_CreateRenderer(_w, -1, SDL_RENDERER_PRESENTVSYNC);
 	if (_r == nullptr)
 		return -3;
 
@@ -39,6 +39,7 @@ errno_t MainFrame::Init(std::string& title) {
 		return -4;
 
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetSwapInterval(1);
 	glDisable(GL_CULL_FACE);
 	glClearColor(0, 0, 0, 1.0);
 	glLoadIdentity();

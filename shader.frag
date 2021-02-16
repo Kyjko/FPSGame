@@ -1,11 +1,25 @@
 #version 330 core
 
-#define MAX_STEPS 2000
+#define MAX_STEPS 300
 #define SURF_DIST .01
-#define MAX_DIST 200.0
-#define REFLECTIVITY .4
+#define MAX_DIST 300.0
+#define REFLECTIVITY .2
+
+//// mandelbulb
+#define Bailout 5.5
+#define Iterations 10
+//// mandelbulb
+
+//// mandelbox
+#define minRadius2 1		// 1
+#define fixedRadius2 20		// 10
+#define Scale 3				//3
+#define foldingLimit 5		//5
+//// mandelbox
 
 #define OLDEFFECT 0
+
+#define RENDER_REFLECTIONS 0
 
 in vec4 vertexColor;
 in vec2 uv;
@@ -31,7 +45,7 @@ float GetLightAndRefl(vec3 p, vec3 ro);
 
 // polynomial smooth min (k = 0.1);
 float smin( float a, float b) {
-	float k = 1.5;
+	float k = 0.2;
     float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
     return mix( b, a, h ) - k*h*(1.0-h);
 }
@@ -42,7 +56,7 @@ float sphere(vec3 p, vec4 sphere) {
 }
 
 float infinite_sphere(vec3 p, vec4 sphere) {
-	float dS = length(mod(p.xyz, 20.0)-sphere.xyz) - sphere.w;
+	float dS = length(mod(p.xyz, 10.0)-sphere.xyz) - sphere.w;
 	return dS;
 }
 
@@ -53,6 +67,92 @@ float plane(vec3 p, float offset) {
 float box(vec3 p, vec3 s) {
 	return length(max(abs(p)-s, 0.));
 }
+
+float mandelbulb(vec3 pos) {
+	float Power = max(2, abs(sin(u_Time/4)*10) + 1.5);
+	vec3 z = pos;
+	float dr = 1;
+	float r = 1;
+	for (int i = 0; i < Iterations ; i++) {
+		r = length(z);
+		if (r>Bailout) break;
+		
+		float theta = acos(z.z/r);
+		float phi = atan(z.y,z.x);
+		dr =  pow( r, Power-1.0)*Power*dr + 1.0;
+		
+		float zr = pow( r,Power);
+		theta = theta*Power;
+		phi = phi*Power;
+		
+		z =  zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta * (.5 + cos(u_Time/30))));
+		z+=pos;
+	}
+	return 0.5*log(r)*r/dr;
+}
+
+/////////////////////////////////
+void sphereFold(inout vec3 z, inout float dz) {
+	float r2 = dot(z,z);
+	if (r2<minRadius2) { 
+		// linear inner scaling
+		float temp = (fixedRadius2/minRadius2);
+		z *= temp;
+		dz*= temp;
+	} else if (r2<fixedRadius2) { 
+		// this is the actual sphere inversion
+		float temp =(fixedRadius2/r2);
+		z *= temp;
+		dz*= temp;
+	}
+}
+
+void boxFold(inout vec3 z, inout float dz) {
+	z = clamp(z, -foldingLimit, foldingLimit) * 2.0 - z;
+}
+float DE(vec3 z)
+{
+	vec3 offset = z;
+	//float dr = 1.0;
+	float dr = 1.;
+	int n;
+	for (n = 0; n < Iterations; n++) {
+		boxFold(z,dr);       // Reflect
+		sphereFold(z,dr);    // Sphere Inversion
+ 		
+        z=Scale*z + offset;  // Scale & Translate
+        dr = dr*abs(Scale)+1.0;
+
+	}
+	//float r = length(z);
+	//return r/abs(dr);
+	return length(z)/abs(dr);
+}
+
+vec3 DE_color(vec3 z)
+{
+	vec3 offset = z;
+	//float dr = 1.0;
+	float dr = 1.;
+	int n;
+
+	float min_orbit_dist = 1000.0;
+	
+	for (n = 0; n < Iterations; n++) {
+		boxFold(z,dr);       // Reflect
+		sphereFold(z,dr);    // Sphere Inversion
+ 		
+        z=Scale*z + offset;  // Scale & Translate
+        dr = dr*abs(Scale)+1.0;
+		
+		min_orbit_dist = min(min_orbit_dist, dr*length(z-offset));
+	}
+	//float r = length(z);
+	//return r/abs(dr);
+	return vec3(/*length(z)/abs(dr)*/length(z)/min_orbit_dist*.25 , length(offset*0.00001*dr)*min_orbit_dist*.0015,  min_orbit_dist*.2);
+}
+
+//////////////////////////////////
 
 vec3 GetNormal(vec3 p) {
 	float d = GetDist(p);
@@ -67,7 +167,7 @@ vec3 GetNormal(vec3 p) {
 
 float GetLight(vec3 p) {
 	vec3 lightPos = vec3(0,10, 6);
-	lightPos.xz += vec2(50*sin(u_Time/4), 50*cos(u_Time/4));
+	lightPos.xz += vec2(150*sin(u_Time/25), 150*cos(u_Time/25));
 	vec3 l = normalize(lightPos - p);
 	vec3 n = GetNormal(p);
 
@@ -77,14 +177,12 @@ float GetLight(vec3 p) {
 	return dif;
 }
 
-float GetRefl(vec3 p, vec3 o) {
-	
-	p += GetNormal(p)*SURF_DIST*14.;
-	vec3 ro = o;
+float GetRefl(vec3 p, vec3 ro) {
 	vec3 n = GetNormal(p);
+	p += n*SURF_DIST*14.;
 	vec3 v = p - ro;
 	float s = dot(n,v);
-    
+  
 	vec3 r = normalize(v - 2. * s * n);
     
 	float d = RayMarch(p,r);
@@ -94,25 +192,33 @@ float GetRefl(vec3 p, vec3 o) {
 }
 
 float GetDist(vec3 p) {
-	float p1 = plane(p, 0);
-	float s1 = sphere(p, vec4(3, 1.5, 8, 1));
-	float s2 = sphere(p, vec4(-5, 3, 10, 2));
-	float s3 = sphere(p, vec4(8, 1.5, 15, 1));
-	float b1 = box(p-vec3(-1.9, 2, 14), vec3(.5, .5, .5));
-	float b2 = box(p-vec3(4.4, 2, 10), vec3(5, 5., .1));
-	//float d3 = sphere(p, vec4(1, 1.5 + sin(u_Time)*1.5, 8, 0.65));
+	float p1 = plane(p, 3);
+	/*float s1 = sphere(p, vec4(3, -1.5, 8, 1));
+	float s2 = sphere(p, vec4(-8, -3, 10, 2));
+	float s3 = sphere(p, vec4(8, -1.5, 15, 1));
+	float b1 = box(p-vec3(-1.9, -2, 14), vec3(.5, .5, .5));
 
-	//float db1 = box(p-vec3(-1.9, 2, 14), vec3(.6, 2, .7));
+	float d3 = sphere(p, vec4(1, -1.5 + sin(u_Time)*1.5, 8, 0.65));
+
+	float db1 = box(p-vec3(-1.9, -2, 14), vec3(.6, 2, .7));
+	*/
 	
+	float m2 = mandelbulb(p);
+	float m1 = DE(p);
 	
-	float dm = min(p1, s1);
+	//float dm = min(p1, m1);
+	
+	/*dm = min(dm, s1);
 	dm = min(dm, s2);
 	dm = min(dm, s3);
 	dm = min(dm, b1);
-	dm = min(dm, b2);
+	dm = min(dm, d3);
+	dm = min(dm, db1);
+	*/
 	//dm = min(dm, d3);
 
-	return dm;
+	return min(min(m1, p1), m2);
+	//return dm;
 }
 
 float GetLightAndRefl(vec3 p, vec3 ro) {
@@ -143,18 +249,23 @@ void main() {
 	vec3 col = vec3(0);
 	
 	vec3 rd = normalize(vec4((vec4(vec3(uv.x, uv.y * u_HperW, 1), 1.) * u_ModelMatrix_view)).xyz);
-	vec3 ro = vec3(0 + u_px, 3 + u_py, 0 + u_pz);
+	vec3 ro = vec3(0 + u_px, -2.5 + u_py, -5 + u_pz);
 	float d = RayMarch(ro, rd);
 	vec3 p = ro + rd * d;
 
-	//float dif = GetLight(p);
+#if RENDER_REFLECTIONS == 1
 	float c = GetLightAndRefl(p, ro);
+#else
+	float c = GetLight(p);
+#endif
+	
 	col = vec3(c);
+	col += DE_color(p)*0.01;
 
 #if OLDEFFECT == 1
 	col *= scanLineIntensity(uv.x + sin(u_Time), 1440, 0.6).xyz;
     col *= scanLineIntensity(uv.y, 2560, 0.3).xyz;
 #endif
 
-	fragColor = vec4(col, 1.0) * vertexColor * 2.;// + 0.3 *vec4(sin(u_Time)/3, cos(u_Time)/5, sin(u_Time)/3, 1.0);
+	fragColor = vec4(col, 1.0) * vertexColor;// + 0.3 *vec4(sin(u_Time)/3, cos(u_Time)/5, sin(u_Time)/3, 1.0);
 }

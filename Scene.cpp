@@ -89,7 +89,7 @@ void Scene::On_Init() {
 			0.2f, 0.9f, 0.56f, 1.0f, 0.5f, particles));*/
 		
 	//}
-	particles.push_back(Particle(-1.0, -1.0, 0.0, 0.29, 0.89, 0.76, 1.0, 2, particles));
+	particles.push_back(Particle(-1.0, -1.0, 0.0, 0.79, 0.79, 0.76, 1.0, 2, particles));
 	UpdateQuads();
 
 	// assert
