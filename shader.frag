@@ -1,9 +1,37 @@
+/*
+	| @author:	Bognár Miklós |
+	| @version:	0.1			  |
+	| @date:	2021-02-22	  |
+	
+	| Shader kód a NuclerPowerPlant.exe applikációhoz
+	| Nyelv: GLSL
+	|
+	
+	| A #define -olt értékek az NVIDIA GTX1080 videokártya teljesítményéhez lettek beállítva
+	| Más videokártyák esetén más értékek bizonyulhatnak jobbnak
+	
+	(a kód (debuggolás miatt) némi redundanciát és felesleges kódrészleteket tartalmaz,
+	ezek azonban nem befolyásolják az alkalmazás teljesítményét)
+	
+*/
+
 #version 330 core
 
-#define MAX_STEPS 300
+// ezeket változthatod (0 - nem, 1 - igen) 
+// (igen tudom az "morphing" és nem "morfing" de lusta vagyok kijavítani)
+///////////////////////////////////////////////////////////////////
+#define OLDEFFECT 0
+#define RENDER_REFLECTIONS 0
+#define MORFING 0
+#define COLORMORFING 0
+///////////////////////////////////////////////////////////////////
+
+// EZEKET CSAK AKKOR HA TUDOD HOGY MIT CSINÁLSZ (és bírja a GPU-d)
+///////////////////////////////////////////////////////////////////
+#define MAX_STEPS 3000
 #define SURF_DIST .01
 #define MAX_DIST 300.0
-#define REFLECTIVITY .2
+#define REFLECTIVITY .45 // csak akkor van hatása, ha a RENDER_REFLECTOINS 1-re van állítva
 
 //// mandelbulb
 #define Bailout 4.5
@@ -16,10 +44,7 @@
 #define Scale 3				//3
 #define foldingLimit 5		//5
 //// mandelbox
-
-#define OLDEFFECT 0
-
-#define RENDER_REFLECTIONS 0
+////////////////////////////////////////////////////////////////////
 
 in vec4 vertexColor;
 in vec2 uv;
@@ -94,21 +119,37 @@ float mandelbulb(vec3 pos) {
 /////////////////////////////////
 void sphereFold(inout vec3 z, inout float dz) {
 	float r2 = dot(z,z);
+#if MORFING == 0
 	if (r2<minRadius2) { 
-		// linear inner scaling
 		float temp = (fixedRadius2/minRadius2);
 		z *= temp;
 		dz*= temp;
 	} else if (r2<fixedRadius2) { 
-		// this is the actual sphere inversion
 		float temp =(fixedRadius2/r2);
 		z *= temp;
 		dz*= temp;
 	}
+#else
+	if (r2<minRadius2) { 
+		// linear inner scaling
+		float temp = ((fixedRadius2+15*sin(u_Time*.2))/(minRadius2+sin(u_Time*.2)));
+		z *= temp;
+		dz*= temp;
+	} else if (r2<(fixedRadius2+15*sin(u_Time*.2))) { 
+		// this is the actual sphere inversion
+		float temp =((15*sin(u_Time*.2)+fixedRadius2)/r2);
+		z *= temp;
+		dz*= temp;
+	}
+#endif
 }
 
 void boxFold(inout vec3 z, inout float dz) {
+#if MORFING == 0
 	z = clamp(z, -foldingLimit, foldingLimit) * 2.0 - z;
+#else
+	z = clamp(z, -(1. + foldingLimit+2.5*cos(u_Time*.2)), (1. + foldingLimit+2.5*cos(u_Time*.2))) * 2.0 - z;
+#endif
 }
 float DE(vec3 z)
 {
@@ -149,6 +190,7 @@ vec3 DE_color(vec3 z)
 	}
 	//float r = length(z);
 	//return r/abs(dr);
+
 	return vec3(/*length(z)/abs(dr)*/length(z)/min_orbit_dist*.25 , length(offset*0.00001*dr)*min_orbit_dist*.0015,  min_orbit_dist*.2);
 }
 
@@ -173,6 +215,11 @@ vec3 mandelbulb_color(vec3 pos) {
 		z+=pos;
 	}
 	return vec3(0.5*log(r)*r/dr, log(r)*length(z-pos)*.002, log(r)*Power*dr*.0001);
+}
+
+vec3 plane_color(vec3 p) {
+	float d = p.y;
+	return vec3(0, d, d + p.y);
 }
 
 //////////////////////////////////
@@ -281,11 +328,17 @@ void main() {
 #else
 	float c = GetLight(p);
 #endif
-	
+
+#if COLORMORFING == 0
 	col = vec3(c);
 	col += DE_color(p)*0.01;
 	col += mandelbulb_color(p)*0.000001;
-
+	//col -= (10-p.y) * plane_color(p)*.0005;
+#else
+	col = vec3(c);
+	col += DE_color(p)*(0.01 + sin(u_Time)*0.015);
+	col += mandelbulb_color(p)*0.00001;
+#endif
 #if OLDEFFECT == 1
 	col *= scanLineIntensity(uv.x + sin(u_Time), 1440, 0.6).xyz;
     col *= scanLineIntensity(uv.y, 2560, 0.3).xyz;
